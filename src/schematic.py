@@ -54,21 +54,23 @@ def build_schematic(
     name: str = "Text Schematic",
     author: str = "litematic-text-generator",
     description: str = "",
+    chunk_corner_block: str | None = None,
 ) -> Schematic:
     """
     Build and return a litemapy Schematic from a rendered block grid.
 
     Parameters
     ----------
-    grid             : 2-D grid (0=air, 1=text, 2=outline, 3=background).
-    orientation      : "vertical" (wall) or "horizontal" (floor).
-    text_block       : Minecraft block ID for value-1 cells.
-    outline_block    : Minecraft block ID for value-2 cells (None = skip).
-    background_block : Minecraft block ID for value-3 cells (None = skip).
-    depth            : layers of depth for the extrusion axis.
-    name             : schematic name embedded in metadata.
-    author           : author string embedded in metadata.
-    description      : description string embedded in metadata.
+    grid                : 2-D grid (0=air, 1=text, 2=outline, 3=background, 4=chunk-corner).
+    orientation         : "vertical" (wall) or "horizontal" (floor).
+    text_block          : Minecraft block ID for value-1 cells.
+    outline_block       : Minecraft block ID for value-2 cells (None = skip).
+    background_block    : Minecraft block ID for value-3 cells (None = skip).
+    depth               : layers of depth for the extrusion axis.
+    name                : schematic name embedded in metadata.
+    author              : author string embedded in metadata.
+    description         : description string embedded in metadata.
+    chunk_corner_block  : Minecraft block ID for value-4 cells (None = skip).
     """
     depth = max(1, depth)
     grid_width, grid_height = get_grid_dimensions(grid)
@@ -78,6 +80,7 @@ def build_schematic(
         1: _bs(text_block),
         2: _bs(outline_block) if outline_block else None,
         3: _bs(background_block) if background_block else None,
+        4: _bs(chunk_corner_block) if chunk_corner_block else None,
     }
 
     # ── Determine region size ─────────────────────────────────────────────────
@@ -128,6 +131,7 @@ def save_schematic(
     name: str = "Text Schematic",
     author: str = "litematic-text-generator",
     description: str = "",
+    chunk_corner_block: str | None = None,
 ) -> Path:
     """
     Build and save a .litematic file.  Returns the resolved output path.
@@ -148,6 +152,7 @@ def save_schematic(
         name=name,
         author=author,
         description=description,
+        chunk_corner_block=chunk_corner_block,
     )
     schem.save(str(output_path))
     return output_path

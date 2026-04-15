@@ -145,6 +145,22 @@ def _add_padding(grid: Grid, padding: int) -> Grid:
 
 # ── Public API ───────────────────────────────────────────────────────────────
 
+def _apply_chunk_corners(grid: Grid, chunk_size: int = 16) -> Grid:
+    """
+    Mark every (row % chunk_size == 0, col % chunk_size == 0) position with
+    cell value 4 (chunk-corner block).  Overwrites whatever was there so the
+    marker is always visible regardless of text/background/outline.
+    Applied last, after padding, so grid position (0,0) is the schematic origin.
+    """
+    result = [row[:] for row in grid]
+    rows = len(result)
+    cols = len(result[0]) if rows else 0
+    for r in range(0, rows, chunk_size):
+        for c in range(0, cols, chunk_size):
+            result[r][c] = 4
+    return result
+
+
 def render_text(
     lines: list[str],
     scale: int = 1,
@@ -154,6 +170,7 @@ def render_text(
     outline_thickness: int = 1,
     background: bool = False,
     padding: int = 1,
+    chunk_corners: bool = False,
 ) -> Grid:
     """
     Render a list of text lines to a 2-D block grid.
@@ -168,10 +185,12 @@ def render_text(
     outline_thickness: outline width in final blocks (post-scale).
     background       : if True, fill air cells with background block (value 3).
     padding          : border of air blocks added on all four sides.
+    chunk_corners    : if True, place a marker (value 4) at every 16×16 grid
+                       intersection (chunk boundary corners within the footprint).
 
     Returns
     -------
-    2-D list of ints: 0=air, 1=text, 2=outline, 3=background.
+    2-D list of ints: 0=air, 1=text, 2=outline, 3=background, 4=chunk-corner.
     """
     scale = max(1, scale)
     char_spacing = max(0, char_spacing)
@@ -209,6 +228,10 @@ def render_text(
     # ── Step 6: padding ───────────────────────────────────────────────────────
     combined = _add_padding(combined, padding)
 
+    # ── Step 7: chunk-corner markers (applied last so they always show) ───────
+    if chunk_corners:
+        combined = _apply_chunk_corners(combined)
+
     return combined
 
 
@@ -220,17 +243,18 @@ def get_grid_dimensions(grid: Grid) -> tuple[int, int]:
 
 
 def count_blocks(grid: Grid) -> dict[str, int]:
-    """Return counts of text, outline, and background blocks."""
-    counts = {1: 0, 2: 0, 3: 0}
+    """Return counts of text, outline, background, and chunk-corner blocks."""
+    counts = {1: 0, 2: 0, 3: 0, 4: 0}
     for row in grid:
         for cell in row:
             if cell in counts:
                 counts[cell] += 1
     return {
-        "text": counts[1],
-        "outline": counts[2],
-        "background": counts[3],
-        "total": counts[1] + counts[2] + counts[3],
+        "text":         counts[1],
+        "outline":      counts[2],
+        "background":   counts[3],
+        "chunk_corner": counts[4],
+        "total":        counts[1] + counts[2] + counts[3] + counts[4],
     }
 
 
@@ -258,7 +282,7 @@ def grid_to_ascii_preview(
     col_step = max(1, (cols + max_width - 1) // max_width)
     row_step = max(1, (rows + max_height - 1) // max_height)
 
-    char_map = {0: air_char, 1: text_char, 2: outline_char, 3: background_char}
+    char_map = {0: air_char, 1: text_char, 2: outline_char, 3: background_char, 4: "◆"}
     lines_out: list[str] = []
     for r in range(0, rows, row_step):
         row_chars = []
