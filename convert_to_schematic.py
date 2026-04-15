@@ -203,6 +203,16 @@ BLOCK_ID_MAP: dict[str, tuple[int, int]] = {
     "minecraft:red_concrete_powder":       (252, 14),
     "minecraft:black_concrete_powder":     (252, 15),
 
+    # ── Map art blocks (1.16+, no true 1.12 equivalent) ──────────────────────
+    # crying_obsidian is the go-to map art block on 2b2t — purple on Xaero's map.
+    # It has no 1.12 numeric ID.  For crying obsidian builds always use the
+    # .litematic + Litematica Replace-All / Icebox Printer workflow, NOT Baritone.
+    # The entry below is a visual stand-in only (purple concrete) if you must
+    # produce a .schematic.
+    "minecraft:crying_obsidian":           (251, 10),  # → purple concrete (closest colour)
+    "minecraft:netherite_block":           (49,  0),   # → obsidian (both very dark)
+    "minecraft:ancient_debris":            (87,  0),   # → netherrack
+
     # ── Misc 1.12-era blocks ─────────────────────────────────────────────────
     "minecraft:hay_block":                 (170, 0),
     "minecraft:bricks":                    (45,  0),

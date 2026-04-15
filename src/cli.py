@@ -42,6 +42,25 @@ Q_STYLE = Style([
 # Format: (display label, minecraft block id)
 # Groups are separated by a "──" separator entry (None value).
 BLOCK_CATALOGUE: list[tuple[str, str | None]] = [
+    # ── Xaero's WorldMap art (visible as colour on the live map) ─────────────
+    # Use these for horizontal builds at the obsidian ceiling (Y=320).
+    # The obsidian ceiling provides the dark background; these blocks replace
+    # only the text pixels, making your text visible in colour on the map.
+    ("── Map Art (Xaero's WorldMap) ──────────────", None),
+    ("Crying Obsidian  ★ purple on map",            "minecraft:crying_obsidian"),
+    ("White Concrete   ★ white on map",             "minecraft:white_concrete"),
+    ("Lime Concrete    ★ bright green on map",      "minecraft:lime_concrete"),
+    ("Yellow Concrete  ★ yellow on map",            "minecraft:yellow_concrete"),
+    ("Red Concrete     ★ red on map",               "minecraft:red_concrete"),
+    ("Light Blue Concrete  ★ blue on map",          "minecraft:light_blue_concrete"),
+    ("Magenta Concrete ★ pink/magenta on map",      "minecraft:magenta_concrete"),
+    ("Orange Concrete  ★ orange on map",            "minecraft:orange_concrete"),
+    ("Glowstone        ★ cream/bright on map",      "minecraft:glowstone"),
+    ("Sea Lantern      ★ light aqua on map",        "minecraft:sea_lantern"),
+    ("Gold Block       ★ gold on map",              "minecraft:gold_block"),
+    ("Emerald Block    ★ green on map",             "minecraft:emerald_block"),
+    ("Obsidian         ★ (ceiling background)",     "minecraft:obsidian"),
+
     # 2b2t abundantly-available materials
     ("── 2b2t Common ─────────────────────────────", None),
     ("Netherrack",                                  "minecraft:netherrack"),
@@ -633,20 +652,28 @@ def run_cli() -> None:
         console.print()
         console.rule("[bold yellow]Optional: Clearance Schematic[/bold yellow]")
         console.print(
-            "[dim]On 2b2t, Y=320 is often covered in obsidian. A [bold]clearance schematic[/bold]\n"
-            "is a solid-fill slab covering the exact same footprint as your text.\n\n"
-            "Workflow:\n"
-            "  [bold]1.[/bold] Load + build [bold]clearance.litematic[/bold] with Baritone →\n"
-            "     it mines all the obsidian and fills the area with a cheap block.\n"
-            "  [bold]2.[/bold] Load + build your [bold]text.litematic[/bold] →\n"
-            "     Baritone mines the fill blocks and places your text.[/dim]\n"
+            "[dim]If building on the obsidian ceiling at Y=320 for [bold]Xaero's WorldMap art[/bold]:\n\n"
+            "[bold]Recommended workflow (crying obsidian / coloured text on map):[/bold]\n"
+            "  [bold]1.[/bold] In [bold]Litematica[/bold], load your schematic and set paste mode to\n"
+            "     [bold]'Replace All'[/bold] — it will mine the obsidian at text pixel positions\n"
+            "     and place your block (e.g. crying obsidian), leaving the\n"
+            "     surrounding obsidian ceiling untouched as the dark background.\n"
+            "  [bold]2.[/bold] [bold]Icebox Printer[/bold] works great for this — freeze at the\n"
+            "     ceiling, load + align the schematic, start printing.\n\n"
+            "[bold]Alternative workflow (Baritone clears everything first):[/bold]\n"
+            "  [bold]1.[/bold] Build [bold]clearance.litematic[/bold] with Baritone → mines the obsidian\n"
+            "     ceiling and places a cheap fill block across the whole footprint.\n"
+            "  [bold]2.[/bold] Build [bold]text.litematic[/bold] with Baritone → places your text blocks\n"
+            "     and mines the fill block everywhere else (leaving air in the gaps).\n"
+            "  [dim]Note: gaps will be air, not obsidian — the surrounding obsidian\n"
+            "  ceiling outside the footprint still provides the map background.[/dim]\n"
         )
-        if _ask_confirm("Generate a clearance schematic for this build?", default=True):
+        if _ask_confirm("Generate a clearance schematic for the Baritone workflow?", default=False):
             console.print(
                 "[dim]Choose a cheap, easy-to-break block.\n"
-                "[bold]Netherrack[/bold] is the best choice on 2b2t — abundant and fast to mine.[/dim]\n"
+                "[bold]Netherrack[/bold] is recommended — abundant on 2b2t and fast to mine.[/dim]\n"
             )
-            clearance_fill = _ask_block("Clearance fill block (Baritone will mine this after clearing):")
+            clearance_fill = _ask_block("Clearance fill block (Baritone mines this after clearing):")
             clearance_out = saved_path.with_name(saved_path.stem + "_clearance.litematic")
 
             with console.status("[bold yellow]Generating clearance schematic…[/bold cyan]", spinner="dots"):
