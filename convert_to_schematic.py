@@ -28,14 +28,12 @@ produced by the Schematica mod and recognised by Baritone's #build command.
 
 from __future__ import annotations
 import argparse
-import gzip
-import io
 import sys
 from pathlib import Path
 
 import numpy as np
 import nbtlib
-from litemapy import Schematic
+from litemapy import Schematic, Region, BlockState
 
 # ── Minecraft 1.12.2 numeric block-ID mapping ─────────────────────────────────
 # (block_string_id) -> (numeric_id, data_value)
@@ -405,9 +403,62 @@ def litematic_to_schematic(
     }
 
 
+# ── Clearance .schematic generator ───────────────────────────────────────────
+
+def generate_clearance_schematic(
+    source_stats: dict,
+    fill_block_id: str,
+    output_path: str | Path,
+) -> Path:
+    """
+    Build a solid-fill one-block-tall .schematic that covers the same XZ
+    footprint as a previously converted text schematic.
+
+    All cells are filled with fill_block_id (numeric ID looked up from
+    BLOCK_ID_MAP; defaults to netherrack if the block is unknown).
+
+    Parameters
+    ----------
+    source_stats  : the dict returned by litematic_to_schematic().
+    fill_block_id : Minecraft block ID to fill with (e.g. "minecraft:netherrack").
+    output_path   : where to write the clearance .schematic.
+    """
+    output_path = Path(output_path)
+    if output_path.suffix.lower() != ".schematic":
+        output_path = output_path.with_suffix(".schematic")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    width  = source_stats["width"]
+    length = source_stats["length"]
+    height = 1   # always a single layer
+
+    fill_id, fill_data = _resolve_block(fill_block_id)
+    total = width * height * length
+    blocks_arr = np.full(total, _to_signed_byte(fill_id),  dtype=np.int8)
+    data_arr   = np.full(total, _to_signed_byte(fill_data), dtype=np.int8)
+
+    nbt_file = nbtlib.File(
+        {
+            "Width":        nbtlib.Short(width),
+            "Height":       nbtlib.Short(height),
+            "Length":       nbtlib.Short(length),
+            "Materials":    nbtlib.String("Alpha"),
+            "Blocks":       nbtlib.ByteArray(blocks_arr),
+            "Data":         nbtlib.ByteArray(data_arr),
+            "TileEntities": nbtlib.List[nbtlib.Compound](),
+            "Entities":     nbtlib.List[nbtlib.Compound](),
+        },
+        gzipped=True,
+        byteorder="big",
+        root_name="",
+    )
+    nbt_file.save(str(output_path), gzipped=True)
+    return output_path
+
+
 # ── Pretty-print helper ───────────────────────────────────────────────────────
 
-def _print_result(stats: dict) -> None:
+def _print_result(stats: dict, clearance_path: Path | None = None) -> None:
     try:
         from rich.console import Console
         from rich.panel import Panel
@@ -416,18 +467,31 @@ def _print_result(stats: dict) -> None:
 
         console = Console()
         console.print()
-        console.print(
-            Panel(
-                f"[bold green]✔  Conversion complete![/bold green]\n\n"
-                f"[bold]Output:[/bold]     {stats['output_path']}\n"
-                f"[bold]Size:[/bold]       {stats['output_path'].stat().st_size / 1024:.1f} KB\n"
-                f"[bold]Dimensions:[/bold] {stats['width']} × {stats['height']} × {stats['length']} blocks  "
-                f"(X × Y × Z)\n"
-                f"[bold]Blocks placed:[/bold] {stats['total_blocks']:,}",
-                title="[bold green].schematic Export[/bold green]",
-                box=box.ROUNDED,
-                border_style="green",
+
+        body = (
+            f"[bold green]✔  Conversion complete![/bold green]\n\n"
+            f"[bold]Output:[/bold]     {stats['output_path']}\n"
+            f"[bold]Size:[/bold]       {stats['output_path'].stat().st_size / 1024:.1f} KB\n"
+            f"[bold]Dimensions:[/bold] {stats['width']} × {stats['height']} × {stats['length']} blocks  "
+            f"(X × Y × Z)\n"
+            f"[bold]Blocks placed:[/bold] {stats['total_blocks']:,}"
+        )
+        if clearance_path:
+            body += (
+                f"\n\n[bold yellow]Clearance:[/bold yellow]  {clearance_path}\n"
+                f"[bold yellow]Clearance size:[/bold yellow]  {clearance_path.stat().st_size / 1024:.1f} KB\n"
+                f"\n[dim][bold]Step 1 (Baritone):[/bold]  #build {clearance_path.name}\n"
+                f"[bold]Step 2 (Baritone):[/bold]  #build {stats['output_path'].name}[/dim]"
             )
+        else:
+            body += (
+                f"\n\n[dim]To use with Baritone:  [bold]#build[/bold] "
+                f"[bold]{stats['output_path'].name}[/bold][/dim]"
+            )
+
+        console.print(
+            Panel(body, title="[bold green].schematic Export[/bold green]",
+                  box=box.ROUNDED, border_style="green")
         )
 
         if stats["substitutions"]:
@@ -448,19 +512,16 @@ def _print_result(stats: dict) -> None:
                 "[dim]Tip: for Baritone builds on 2b2t, use blocks with 1.12 IDs\n"
                 "(netherrack, cobblestone, concrete, wool, obsidian, etc.).[/dim]"
             )
-
-        console.print()
-        console.print(
-            "[dim]To use with Baritone:  [bold]#build[/bold] (or [bold]#schematic[/bold]) "
-            f"[bold]{stats['output_path'].name}[/bold][/dim]"
-        )
         console.print()
 
     except ImportError:
-        # Fallback if rich is not available
         print(f"\n✔ Saved: {stats['output_path']}")
         print(f"  Dimensions: {stats['width']}x{stats['height']}x{stats['length']}")
         print(f"  Blocks: {stats['total_blocks']:,}")
+        if clearance_path:
+            print(f"  Clearance: {clearance_path}")
+            print(f"  Step 1: #build {clearance_path.name}")
+            print(f"  Step 2: #build {stats['output_path'].name}")
         if stats["substitutions"]:
             print("  ⚠ Substitutions (→ stone):")
             for bid, cnt in sorted(stats["substitutions"].items(), key=lambda x: -x[1]):
@@ -518,10 +579,30 @@ def _interactive() -> None:
 
         console.print("[bold cyan]Converting…[/bold cyan]")
         stats = litematic_to_schematic(src, dst)
-        _print_result(stats)
+
+        clearance_path = None
+        want_clearance = questionary.confirm(
+            "Generate a clearance schematic for pre-mining obsidian at Y=320?",
+            default=True,
+            style=Q_STYLE,
+        ).ask()
+        if want_clearance:
+            fill_choices = [
+                questionary.Choice("Netherrack  (recommended — fast to mine, abundant on 2b2t)",
+                                   value="minecraft:netherrack"),
+                questionary.Choice("Cobblestone", value="minecraft:cobblestone"),
+                questionary.Choice("Sand",        value="minecraft:sand"),
+                questionary.Choice("Stone",       value="minecraft:stone"),
+            ]
+            fill = questionary.select(
+                "Fill block for clearance layer:", choices=fill_choices, style=Q_STYLE
+            ).ask() or "minecraft:netherrack"
+            clearance_out = Path(dst).with_name(Path(dst).stem + "_clearance.schematic")
+            clearance_path = generate_clearance_schematic(stats, fill, clearance_out)
+
+        _print_result(stats, clearance_path)
 
     except ImportError:
-        # Bare-bones fallback
         src = input("Source .litematic file: ").strip()
         dst = input(f"Output .schematic [{Path(src).with_suffix('.schematic')}]: ").strip()
         if not dst:
@@ -549,6 +630,19 @@ def main() -> None:
         nargs="?",
         help=".schematic output file path (defaults to same name as input).",
     )
+    parser.add_argument(
+        "--clearance",
+        metavar="BLOCK_ID",
+        nargs="?",
+        const="minecraft:netherrack",
+        default=None,
+        help=(
+            "Also generate a clearance .schematic filled with BLOCK_ID "
+            "(default: minecraft:netherrack).  Build this FIRST with Baritone "
+            "to mine the obsidian ceiling, then build the text schematic. "
+            "Example: --clearance  OR  --clearance minecraft:cobblestone"
+        ),
+    )
     args = parser.parse_args()
 
     if args.input is None:
@@ -564,7 +658,15 @@ def main() -> None:
 
     print(f"Converting {input_path} → {output_path} …")
     stats = litematic_to_schematic(input_path, output_path)
-    _print_result(stats)
+
+    clearance_path = None
+    if args.clearance is not None:
+        fill_block = args.clearance
+        clearance_out = output_path.with_name(output_path.stem + "_clearance.schematic")
+        print(f"Generating clearance schematic ({fill_block}) → {clearance_out} …")
+        clearance_path = generate_clearance_schematic(stats, fill_block, clearance_out)
+
+    _print_result(stats, clearance_path)
 
 
 if __name__ == "__main__":

@@ -153,6 +153,67 @@ def save_schematic(
     return output_path
 
 
+# ── Clearance schematic ───────────────────────────────────────────────────────
+
+def save_clearance_schematic(
+    grid: Grid,
+    fill_block: str,
+    output_path: str | Path,
+    name: str = "Clearance",
+    author: str = "litematic-text-generator",
+) -> Path:
+    """
+    Generate a solid-fill 'clearance' .litematic that covers the exact same
+    XZ footprint as the text grid but is one block tall and filled entirely
+    with fill_block.
+
+    Workflow
+    --------
+    1. Build clearance.litematic first — Baritone mines the obsidian layer
+       and places fill_block everywhere in the footprint.
+    2. Build your text.litematic — Baritone mines fill_block where air is
+       needed and places your text blocks everywhere else.
+
+    The result: obsidian is completely gone, text is built cleanly.
+
+    Parameters
+    ----------
+    grid       : the same 2-D grid used for the text schematic (only its
+                 dimensions matter — all cells are treated as filled).
+    fill_block : Minecraft block ID to use as the fill (e.g.
+                 "minecraft:netherrack").  Choose something cheap to break.
+    output_path: where to save the .litematic file.
+    """
+    output_path = Path(output_path)
+    if output_path.suffix.lower() != ".litematic":
+        output_path = output_path.with_suffix(".litematic")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    grid_width, grid_height = get_grid_dimensions(grid)
+    block = _bs(fill_block)
+
+    # Clearance is always 1 block tall (Y=1); XZ matches the text footprint.
+    # For a horizontal text build the footprint is grid_width × grid_height;
+    # for a vertical build the footprint is grid_width (X) × depth (Z), but
+    # we default to the grid dimensions since the caller passes the text grid.
+    reg = Region(0, 0, 0, grid_width, 1, grid_height)
+    for bx in range(grid_width):
+        for bz in range(grid_height):
+            reg[bx, 0, bz] = block
+
+    schem = reg.as_schematic(
+        name=name,
+        author=author,
+        description=(
+            f"Clearance layer for text schematic. "
+            f"Build FIRST to mine existing blocks, then build the text schematic. "
+            f"Fill block: {fill_block}."
+        ),
+    )
+    schem.save(str(output_path))
+    return output_path
+
+
 # ── Dimension helpers (used by CLI for the summary table) ─────────────────────
 
 def get_schematic_dimensions(

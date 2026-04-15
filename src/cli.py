@@ -21,7 +21,7 @@ from rich import box
 
 from .font import get_unsupported_chars
 from .renderer import render_text, get_grid_dimensions, count_blocks, grid_to_ascii_preview
-from .schematic import save_schematic, get_schematic_dimensions
+from .schematic import save_schematic, save_clearance_schematic, get_schematic_dimensions
 
 console = Console()
 
@@ -627,16 +627,59 @@ def run_cli() -> None:
             ),
         )
 
+    # ── 20. Clearance schematic (horizontal builds at obby ceiling / Y=320) ──────
+    clearance_path: Path | None = None
+    if orientation == "horizontal":
+        console.print()
+        console.rule("[bold yellow]Optional: Clearance Schematic[/bold yellow]")
+        console.print(
+            "[dim]On 2b2t, Y=320 is often covered in obsidian. A [bold]clearance schematic[/bold]\n"
+            "is a solid-fill slab covering the exact same footprint as your text.\n\n"
+            "Workflow:\n"
+            "  [bold]1.[/bold] Load + build [bold]clearance.litematic[/bold] with Baritone →\n"
+            "     it mines all the obsidian and fills the area with a cheap block.\n"
+            "  [bold]2.[/bold] Load + build your [bold]text.litematic[/bold] →\n"
+            "     Baritone mines the fill blocks and places your text.[/dim]\n"
+        )
+        if _ask_confirm("Generate a clearance schematic for this build?", default=True):
+            console.print(
+                "[dim]Choose a cheap, easy-to-break block.\n"
+                "[bold]Netherrack[/bold] is the best choice on 2b2t — abundant and fast to mine.[/dim]\n"
+            )
+            clearance_fill = _ask_block("Clearance fill block (Baritone will mine this after clearing):")
+            clearance_out = saved_path.with_name(saved_path.stem + "_clearance.litematic")
+
+            with console.status("[bold yellow]Generating clearance schematic…[/bold cyan]", spinner="dots"):
+                clearance_path = save_clearance_schematic(
+                    grid=grid,
+                    fill_block=clearance_fill,
+                    output_path=clearance_out,
+                    name=f"Clearance — {' / '.join(lines)}",
+                    author=author.strip() or "litematic-text-generator",
+                )
+
     console.print()
+    done_body = (
+        f"[bold green]✔  Schematic saved successfully![/bold green]\n\n"
+        f"[bold]File:[/bold]  {saved_path}\n"
+        f"[bold]Size:[/bold]  {saved_path.stat().st_size / 1024:.1f} KB\n"
+    )
+    if clearance_path:
+        done_body += (
+            f"\n[bold yellow]Clearance file:[/bold yellow]  {clearance_path}\n"
+            f"[bold yellow]Clearance size:[/bold yellow]  {clearance_path.stat().st_size / 1024:.1f} KB\n"
+            f"\n[dim][bold]Step 1 (Baritone):[/bold]  #build {clearance_path.name}\n"
+            f"[bold]Step 2 (Baritone):[/bold]  #build {saved_path.name}[/dim]\n"
+        )
+    done_body += (
+        "\n[dim]In Litematica:  press [bold]M[/bold] → [bold]Load Schematic[/bold] "
+        "and navigate to this file to import it.\n"
+        "With Icebox Printer, freeze in place, load the schematic, "
+        "align it, and start printing![/dim]"
+    )
     console.print(
         Panel(
-            f"[bold green]✔  Schematic saved successfully![/bold green]\n\n"
-            f"[bold]File:[/bold]  {saved_path}\n"
-            f"[bold]Size:[/bold]  {saved_path.stat().st_size / 1024:.1f} KB\n\n"
-            "[dim]In Litematica:  press [bold]M[/bold] → [bold]Load Schematic[/bold] "
-            "and navigate to this file to import it.\n"
-            "With Icebox Printer, freeze in place, load the schematic, "
-            "align it, and start printing![/dim]",
+            done_body,
             title="[bold green]Done[/bold green]",
             box=box.ROUNDED,
             border_style="green",
