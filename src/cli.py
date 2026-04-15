@@ -453,19 +453,59 @@ def run_cli() -> None:
             "Outline thickness (blocks)", default=1, min_val=1, max_val=5
         )
 
-    # ── 13. Background ────────────────────────────────────────────────────────
+    # ── 13. Background / surface block ───────────────────────────────────────
     console.print()
-    use_background = _ask_confirm(
-        "Fill the background (air gaps inside the schematic bounding box) with a block?",
-        default=False,
-    )
     background_block: str | None = None
-    if use_background:
+    use_background = False
+
+    if orientation == "horizontal":
+        # For horizontal builds the background block is the KEY to precision mining.
+        # Baritone compares each schematic position against the world:
+        #   • schematic block == world block  → skip (no action)
+        #   • schematic block != world block  → mine existing block, place schematic block
+        # Setting background = the block already on the surface means Baritone only
+        # acts on text pixel positions (where the blocks differ) and leaves every
+        # gap position untouched.
         console.print(
-            "[dim]Background blocks fill the rectangular bounding box behind the text. "
-            "Useful for signs, banners, or chroma-key style builds.[/dim]"
+            "[bold yellow]Surface block — precision mining[/bold yellow]\n"
+            "[dim]What block is currently at your build surface?\n\n"
+            "Setting this here tells Baritone to [bold]only mine the text pixel positions[/bold]\n"
+            "and leave every gap position exactly as-is.\n\n"
+            "Example: obsidian ceiling at Y=320 → set surface block = [bold]Obsidian[/bold].\n"
+            "Baritone will mine obsidian only where your text pixels go, swap it for\n"
+            "your chosen text block, and leave all surrounding obsidian untouched.[/dim]\n"
         )
-        background_block = _ask_block("Background block:")
+        surface_mode = questionary.select(
+            "Is there an existing block at the build surface?",
+            choices=[
+                Choice(
+                    "Yes — specify it  (Baritone mines ONLY text pixel positions)",
+                    value="set",
+                ),
+                Choice(
+                    "No — surface is air / I'll clear it manually",
+                    value="none",
+                ),
+            ],
+            style=Q_STYLE,
+        ).ask()
+        if surface_mode is None:
+            sys.exit(0)
+
+        if surface_mode == "set":
+            use_background = True
+            background_block = _ask_block("What block is already at the build surface?")
+    else:
+        # Vertical builds — generic optional background
+        use_background = _ask_confirm(
+            "Fill the background behind the text with a block? (optional, e.g. for signs/banners)",
+            default=False,
+        )
+        if use_background:
+            console.print(
+                "[dim]Background fills all non-text cells in the bounding box.[/dim]"
+            )
+            background_block = _ask_block("Background block:")
 
     # ── 14. Output settings ───────────────────────────────────────────────────
     console.print()
@@ -696,14 +736,23 @@ def run_cli() -> None:
             f"\n[bold yellow]Clearance file:[/bold yellow]  {clearance_path}\n"
             f"[bold yellow]Clearance size:[/bold yellow]  {clearance_path.stat().st_size / 1024:.1f} KB\n"
             f"\n[dim][bold]Step 1 (Baritone):[/bold]  #build {clearance_path.name}\n"
-            f"[bold]Step 2 (Baritone):[/bold]  #build {saved_path.name}[/dim]\n"
+            f"[bold]Step 2 (Baritone):[/bold]  #build {saved_path.name}[/dim]"
         )
-    done_body += (
-        "\n[dim]In Litematica:  press [bold]M[/bold] → [bold]Load Schematic[/bold] "
-        "and navigate to this file to import it.\n"
-        "With Icebox Printer, freeze in place, load the schematic, "
-        "align it, and start printing![/dim]"
-    )
+    elif orientation == "horizontal" and use_background and background_block:
+        done_body += (
+            f"\n[bold]Surface block:[/bold]  {background_block}\n"
+            f"\n[dim][bold]Baritone (precision mode):[/bold]\n"
+            f"  #build {saved_path.name}\n\n"
+            f"Baritone mines [bold]only[/bold] where {background_block} ≠ {text_block}\n"
+            f"and leaves every other position untouched.[/dim]"
+        )
+    else:
+        done_body += (
+            "\n[dim]In Litematica:  press [bold]M[/bold] → [bold]Load Schematic[/bold] "
+            "and navigate to this file to import it.\n"
+            "With Icebox Printer, freeze in place, load the schematic, "
+            "align it, and start printing![/dim]"
+        )
     console.print(
         Panel(
             done_body,
